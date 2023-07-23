@@ -16,7 +16,10 @@ func main() {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	userService := user.NewService("myapp.db")
+	userService, err := user.NewService("myapp.db")
+	if err != nil {
+		log.Fatalf("Error creating user service: %v", err)
+	}
 
 	r := mux.NewRouter()
 

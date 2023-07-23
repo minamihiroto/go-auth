@@ -26,14 +26,10 @@ type Service struct {
 	redis *redis.Client
 }
 
-func NewService(dbFile string) *Service {
-	if mySigningKey == "" {
-		panic("JWT Keys are not set in the environment variables")
-	}
-
+func NewService(dbFile string) (*Service, error) {
 	db, err := sql.Open("sqlite3", dbFile)
 	if err != nil {
-		panic(fmt.Errorf("failed to open database: %v", err))
+		return nil, fmt.Errorf("Error opening database: %v", err)
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
@@ -42,10 +38,17 @@ func NewService(dbFile string) *Service {
 		DB:       0,  // use default DB
 	})
 
-	statement, _ := db.Prepare("CREATE TABLE IF NOT EXISTS user (username TEXT PRIMARY KEY, password TEXT)")
-	statement.Exec()
+	statement, err := db.Prepare("CREATE TABLE IF NOT EXISTS user (username TEXT PRIMARY KEY, password TEXT)")
+	if err != nil {
+		return nil, fmt.Errorf("Error preparing database statement: %v", err)
+	}
 
-	return &Service{db: db, redis: redisClient}
+	_, err = statement.Exec()
+	if err != nil {
+		return nil, fmt.Errorf("Error executing database statement: %v", err)
+	}
+
+	return &Service{db: db, redis: redisClient}, nil
 }
 
 func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +79,11 @@ func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Could not commit transaction: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	fmt.Fprintf(w, "User %s registered", username)
 }
