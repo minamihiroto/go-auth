@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/dgrijalva/jwt-go/request"
+	"github.com/go-redis/redis/v8"
 )
 
 const (
@@ -19,7 +21,8 @@ const (
 )
 
 type Service struct {
-	db *sql.DB
+	db    *sql.DB
+	redis *redis.Client
 }
 
 func NewService(dbFile string) *Service {
@@ -28,10 +31,16 @@ func NewService(dbFile string) *Service {
 		panic(err)
 	}
 
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
 	statement, _ := db.Prepare("CREATE TABLE IF NOT EXISTS user (username TEXT PRIMARY KEY, password TEXT)")
 	statement.Exec()
 
-	return &Service{db: db}
+	return &Service{db: db, redis: redisClient}
 }
 
 func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
@@ -105,15 +114,54 @@ func generateJwt(username string) (string, error) {
 
 func (s *Service) Authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-					func(token *jwt.Token) (interface{}, error) {
-							return []byte(mySigningKey), nil
-					})
+		token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
+			func(token *jwt.Token) (interface{}, error) {
+				return []byte(mySigningKey), nil
+			})
 
-			if err == nil && token.Valid {
-					next.ServeHTTP(w, r)
-			} else {
-					http.Error(w, "Invalid token", http.StatusUnauthorized)
+		if err != nil {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		if token.Valid {
+			tokenString := token.Raw
+			_, err := s.redis.Get(context.Background(), tokenString).Result()
+
+			if err != redis.Nil {
+				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				return
 			}
+
+			next.ServeHTTP(w, r)
+		} else {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+		}
 	})
+}
+
+func (s *Service) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
+		func(token *jwt.Token) (interface{}, error) {
+			return []byte(mySigningKey), nil
+		})
+
+	if err != nil {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	if token.Valid {
+		tokenString := token.Raw
+
+		err := s.redis.Set(context.Background(), tokenString, tokenString, time.Hour).Err()
+		if err != nil {
+			http.Error(w, "Logout failed", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+	}
+
+	fmt.Fprintf(w, "Successfully logged out")
 }
