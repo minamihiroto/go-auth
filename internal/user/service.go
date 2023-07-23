@@ -33,7 +33,7 @@ func NewService(dbFile string) *Service {
 
 	db, err := sql.Open("sqlite3", dbFile)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("failed to open database: %v", err))
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
@@ -52,23 +52,27 @@ func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
-	hash, _ := hashPassword(password)
+	hash, err := hashPassword(password)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Could not hash password: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	tx, err := s.db.Begin()
 	if err != nil {
-		http.Error(w, "Could not complete request", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Could not begin transaction: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	stmt, err := tx.Prepare("INSERT INTO user(username, password) values(?, ?)")
 	if err != nil {
-		http.Error(w, "Could not complete request", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Could not prepare statement: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	_, err = stmt.Exec(username, hash)
 	if err != nil {
-		http.Error(w, "Could not complete request", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Could not execute statement: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -84,7 +88,7 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var hash string
 	err := s.db.QueryRow("SELECT password FROM user WHERE username=?", username).Scan(&hash)
 	if err != nil {
-		http.Error(w, "Could not complete request", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Could not query user password: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -93,7 +97,11 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenString, _ := generateJwt(username)
+	tokenString, err := generateJwt(username)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Could not generate token: %v", err), http.StatusInternalServerError)
+		return
+	}
 	fmt.Fprintf(w, "Token: %s", tokenString)
 }
 
@@ -152,7 +160,7 @@ func (s *Service) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		})
 
 	if err != nil {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		http.Error(w, fmt.Sprintf("Could not set token in redis: %v", err), http.StatusInternalServerError)
 		return
 	}
 
