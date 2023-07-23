@@ -1,13 +1,21 @@
 package main
 
 import (
-	"net/http"
+	"log"
 	"myapp/internal/user"
+	"net/http"
+
+	"github.com/joho/godotenv"
 
 	"github.com/gorilla/mux"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	userService := user.NewService("myapp.db")
 
 	r := mux.NewRouter()

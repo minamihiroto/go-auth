@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -16,8 +17,8 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-const (
-	mySigningKey = "secret"
+var (
+	mySigningKey = os.Getenv("MY_SIGNING_KEY")
 )
 
 type Service struct {
@@ -26,6 +27,10 @@ type Service struct {
 }
 
 func NewService(dbFile string) *Service {
+	if mySigningKey == "" {
+		panic("JWT Keys are not set in the environment variables")
+	}
+
 	db, err := sql.Open("sqlite3", dbFile)
 	if err != nil {
 		panic(err)
