@@ -20,10 +20,9 @@ func main() {
 
 	r := mux.NewRouter()
 
-	s := user.NewService("myapp.db")
-	r.HandleFunc("/register", s.RegisterHandler)
-	r.HandleFunc("/login", s.LoginHandler)
-	r.HandleFunc("/logout", s.LogoutHandler)
+	r.HandleFunc("/register", userService.RegisterHandler)
+	r.HandleFunc("/login", userService.LoginHandler)
+	r.HandleFunc("/logout", userService.LogoutHandler)
 	r.HandleFunc("/auth", userService.Authenticate(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("This is an authenticated response"))
 	}))
