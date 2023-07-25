@@ -2,12 +2,13 @@ package main
 
 import (
 	"log"
-	"myapp/internal/user"
 	"net/http"
+	"os"
 
-	"github.com/joho/godotenv"
+	"myapp/internal/user"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -16,7 +17,8 @@ func main() {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	userService, err := user.NewService("myapp.db")
+	mySigningKey := os.Getenv("MY_SIGNING_KEY")
+	userService, err := user.NewService("myapp.db", mySigningKey)
 	if err != nil {
 		log.Fatalf("Error creating user service: %v", err)
 	}
