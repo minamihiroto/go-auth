@@ -8,16 +8,14 @@ import (
 	"myapp/internal/user"
 
 	"github.com/gorilla/mux"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
-
 	mySigningKey := os.Getenv("MY_SIGNING_KEY")
+	if mySigningKey == "" {
+		log.Fatalf("Environment variable MY_SIGNING_KEY is not set")
+	}
+	
 	userService, err := user.NewService("myapp.db", mySigningKey)
 	if err != nil {
 		log.Fatalf("Error creating user service: %v", err)
