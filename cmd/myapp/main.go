@@ -6,8 +6,6 @@ import (
 	"os"
 
 	"myapp/internal/user"
-
-	"github.com/gorilla/mux"
 )
 
 func main() {
@@ -21,14 +19,12 @@ func main() {
 		log.Fatalf("Error creating user service: %v", err)
 	}
 
-	r := mux.NewRouter()
-
-	r.HandleFunc("/register", userService.RegisterHandler)
-	r.HandleFunc("/login", userService.LoginHandler)
-	r.HandleFunc("/logout", userService.LogoutHandler)
-	r.HandleFunc("/auth", userService.Authenticate(func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/register", userService.RegisterHandler)
+	http.HandleFunc("/login", userService.LoginHandler)
+	http.HandleFunc("/logout", userService.LogoutHandler)
+	http.HandleFunc("/auth", userService.Authenticate(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("This is an authenticated response"))
 	}))
 
-	http.ListenAndServe(":8080", r)
+	http.ListenAndServe(":8080", nil)
 }

@@ -2,17 +2,17 @@ package user
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
-	"github.com/dgrijalva/jwt-go/request"
 	"github.com/go-redis/redis/v8"
+	"github.com/golang-jwt/jwt"
 	_ "github.com/mattn/go-sqlite3"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 type Service struct {
@@ -53,12 +53,7 @@ func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
-	hash, err := hashPassword(password)
-	if err != nil {
-		http.Error(w, "Could not hash password", http.StatusInternalServerError)
-		log.Printf("Could not hash password: %v", err)
-		return
-	}
+	hash := hashPassword(password)
 
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -121,14 +116,15 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	log.Print(message)
 }
 
-func hashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	return string(bytes), err
+func hashPassword(password string) string {
+	hasher := sha256.New()
+	hasher.Write([]byte(password))
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func checkPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
+	passwordHash := hashPassword(password)
+	return passwordHash == hash
 }
 
 func (s *Service) generateJwt(username string) (string, error) {
@@ -143,11 +139,23 @@ func (s *Service) generateJwt(username string) (string, error) {
 
 func (s *Service) Authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-			func(token *jwt.Token) (interface{}, error) {
-				return []byte(s.mySigningKey), nil
-			})
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			log.Print("Invalid token: no Authorization header")
+			return
+		}
 
+		bearerToken := strings.TrimPrefix(authHeader, "Bearer ")
+		if bearerToken == "" {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			log.Print("Invalid token: no Bearer token")
+			return
+		}
+
+		token, err := jwt.Parse(bearerToken, func(token *jwt.Token) (interface{}, error) {
+			return []byte(s.mySigningKey), nil
+		})
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			log.Printf("Invalid token: %v", err)
@@ -155,9 +163,7 @@ func (s *Service) Authenticate(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if token.Valid {
-			tokenString := token.Raw
-			_, err := s.redis.Get(context.Background(), tokenString).Result()
-
+			_, err := s.redis.Get(context.Background(), bearerToken).Result()
 			if err != redis.Nil {
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				log.Printf("Invalid token: %v", err)
@@ -173,29 +179,25 @@ func (s *Service) Authenticate(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Service) LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
-		func(token *jwt.Token) (interface{}, error) {
-			return []byte(s.mySigningKey), nil
-		})
-
-	if err != nil {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
 		http.Error(w, "Could not set token in redis", http.StatusInternalServerError)
-		log.Printf("Could not set token in redis: %v", err)
+		log.Print("Could not set token in redis: no Authorization header")
 		return
 	}
 
-	if token.Valid {
-		tokenString := token.Raw
+	bearerToken := strings.TrimPrefix(authHeader, "Bearer ")
+	if bearerToken == "" {
+		http.Error(w, "Could not set token in redis", http.StatusInternalServerError)
+		log.Print("Could not set token in redis: no Bearer token")
+		return
+	}
 
-		err := s.redis.Set(context.Background(), tokenString, tokenString, time.Hour).Err()
-		if err != nil {
-			http.Error(w, "Logout failed", http.StatusInternalServerError)
-			log.Printf("Logout failed: %v", err)
-			return
-		}
-	} else {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		log.Printf("Invalid token: %v", err)
+	err := s.redis.Set(context.Background(), bearerToken, bearerToken, time.Hour).Err()
+	if err != nil {
+		http.Error(w, "Logout failed", http.StatusInternalServerError)
+		log.Printf("Logout failed: %v", err)
+		return
 	}
 
 	message := "Successfully logged out"
