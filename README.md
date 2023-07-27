@@ -1,10 +1,16 @@
-これはgoを使った簡単な認証認可APIです。
-勉強用途で作りました。**まだ未完成**
+これは go を使った簡単な認証認可 API です。（随時アップデート予定）
+勉強用途で作りました。
 
-redisを使っています。
-自分はmacなので、brewでinstallしました。
+sqlite と redis を使っています。
+自分は mac なので、brew で redis install しました。
 
-.envを使わずに、環境変数をそのまま登録する方式をとっています。
-そのため、起動シェルと削除シェルがあります。環境変数周りを汚したく無い場合、そちらを使ってください。
+.env を使わずに、環境変数をそのまま登録する方式をとっています。
+そのため、起動シェルと削除シェルを用意しています。環境変数周りを汚したく無い場合、そちらを使ってください。
 
-dockerを使えというツッコミはやめてください。めんどくさかったので、また今度対応します。
+redis で汚してるやんとか docker を使えというツッコミはやめてください。そこめんどくさかったので、また今度対応します。
+
+**curl コマンドヒント**
+新規登録:`curl -X POST -d "username=value&password=value" http://localhost:8080/register`
+ログイン:`curl -X POST -d "username=value&password=value" http://localhost:8080/login`
+ログイン状態確認:`curl -H "Authorization: Bearer your_token" http://localhost:8080/auth`
+ログアウト:`curl -H "Authorization: Bearer your_token" http://localhost:8080/logout`
