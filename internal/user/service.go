@@ -34,7 +34,7 @@ func NewService(dbFile string, mySigningKey string) (*Service, error) {
 		DB:       0,
 	})
 
-	statement, err := db.Prepare("CREATE TABLE IF NOT EXISTS user (username TEXT PRIMARY KEY, password TEXT)")
+	statement, err := db.Prepare("CREATE TABLE IF NOT EXISTS user (email TEXT PRIMARY KEY, password TEXT)")
 	if err != nil {
 		log.Printf("Error preparing database statement: %v", err)
 		return nil, err
@@ -50,7 +50,7 @@ func NewService(dbFile string, mySigningKey string) (*Service, error) {
 }
 
 func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	username := r.FormValue("username")
+	email := r.FormValue("email")
 	password := r.FormValue("password")
 
 	hash := hashPassword(password)
@@ -62,14 +62,14 @@ func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO user(username, password) values(?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO user(email, password) values(?, ?)")
 	if err != nil {
 		http.Error(w, "Could not prepare statement", http.StatusInternalServerError)
 		log.Printf("Could not prepare statement: %v", err)
 		return
 	}
 
-	_, err = stmt.Exec(username, hash)
+	_, err = stmt.Exec(email, hash)
 	if err != nil {
 		http.Error(w, "Could not execute statement", http.StatusInternalServerError)
 		log.Printf("Could not execute statement: %v", err)
@@ -83,17 +83,17 @@ func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message := "User " + username + " registered"
+	message := "User " + email + " registered"
 	w.Write([]byte(message))
 	log.Print(message)
 }
 
 func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
-	username := r.FormValue("username")
+	email := r.FormValue("email")
 	password := r.FormValue("password")
 
 	var hash string
-	err := s.db.QueryRow("SELECT password FROM user WHERE username=?", username).Scan(&hash)
+	err := s.db.QueryRow("SELECT password FROM user WHERE email=?", email).Scan(&hash)
 	if err != nil {
 		http.Error(w, "Could not query user password", http.StatusInternalServerError)
 		log.Printf("Could not query user password: %v", err)
@@ -105,7 +105,7 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenString, err := s.generateJwt(username)
+	tokenString, err := s.generateJwt(email)
 	if err != nil {
 		http.Error(w, "Could not generate token", http.StatusInternalServerError)
 		log.Printf("Could not generate token: %v", err)
@@ -127,10 +127,10 @@ func checkPasswordHash(password, hash string) bool {
 	return passwordHash == hash
 }
 
-func (s *Service) generateJwt(username string) (string, error) {
+func (s *Service) generateJwt(email string) (string, error) {
 	token := jwt.New(jwt.SigningMethodHS256)
 	claims := token.Claims.(jwt.MapClaims)
-	claims["username"] = username
+	claims["email"] = email
 	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
 
 	tokenString, err := token.SignedString([]byte(s.mySigningKey))

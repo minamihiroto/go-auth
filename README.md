@@ -10,7 +10,7 @@ sqlite と redis を使っています。
 redis で汚してるやんとか docker を使えというツッコミはやめてください。そこめんどくさかったので、また今度対応します。
 
 **curl コマンドヒント**
-新規登録:`curl -X POST -d "username=value&password=value" http://localhost:8080/register`
-ログイン:`curl -X POST -d "username=value&password=value" http://localhost:8080/login`
+新規登録:`curl -X POST -d "email=value&password=value" http://localhost:8080/register`
+ログイン:`curl -X POST -d "email=value&password=value" http://localhost:8080/login`
 ログイン状態確認:`curl -H "Authorization: Bearer your_token" http://localhost:8080/auth`
 ログアウト:`curl -H "Authorization: Bearer your_token" http://localhost:8080/logout`
