@@ -2,9 +2,6 @@ package user
 
 import (
 	"context"
-	"crypto/sha256"
-	"database/sql"
-	"encoding/hex"
 	"log"
 	"net/http"
 	"strings"
@@ -12,42 +9,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt"
-	_ "github.com/mattn/go-sqlite3"
 )
-
-type Service struct {
-	db           *sql.DB
-	redis        *redis.Client
-	mySigningKey string
-}
-
-func NewService(dbFile string, mySigningKey string) (*Service, error) {
-	db, err := sql.Open("sqlite3", dbFile)
-	if err != nil {
-		log.Printf("Error opening database: %v", err)
-		return nil, err
-	}
-
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-	})
-
-	statement, err := db.Prepare("CREATE TABLE IF NOT EXISTS user (email TEXT PRIMARY KEY, password TEXT)")
-	if err != nil {
-		log.Printf("Error preparing database statement: %v", err)
-		return nil, err
-	}
-
-	_, err = statement.Exec()
-	if err != nil {
-		log.Printf("Error executing database statement: %v", err)
-		return nil, err
-	}
-
-	return &Service{db: db, redis: redisClient, mySigningKey: mySigningKey}, nil
-}
 
 func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
@@ -114,27 +76,6 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	message := "Token: " + tokenString
 	w.Write([]byte(message))
 	log.Print(message)
-}
-
-func hashPassword(password string) string {
-	hasher := sha256.New()
-	hasher.Write([]byte(password))
-	return hex.EncodeToString(hasher.Sum(nil))
-}
-
-func checkPasswordHash(password, hash string) bool {
-	passwordHash := hashPassword(password)
-	return passwordHash == hash
-}
-
-func (s *Service) generateJwt(email string) (string, error) {
-	token := jwt.New(jwt.SigningMethodHS256)
-	claims := token.Claims.(jwt.MapClaims)
-	claims["email"] = email
-	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
-
-	tokenString, err := token.SignedString([]byte(s.mySigningKey))
-	return tokenString, err
 }
 
 func (s *Service) Authenticate(next http.HandlerFunc) http.HandlerFunc {
