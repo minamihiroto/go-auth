@@ -14,21 +14,21 @@ func main() {
 		log.Fatalf("Environment variable MY_SIGNING_KEY is not set")
 	}
 
-	userService, err := user.NewService("myapp.db", mySigningKey)
+	authService, err := auth.NewService("myapp.db", mySigningKey)
 	if err != nil {
-		log.Fatalf("Error creating user service: %v", err)
+		log.Fatalf("Error creating auth service: %v", err)
 	}
 
 	http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
-		userService.RegisterHandler(w, r)
+		authService.RegisterHandler(w, r)
 	})
 	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
-		userService.LoginHandler(w, r)
+		authService.LoginHandler(w, r)
 	})
 	http.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-		userService.LogoutHandler(w, r)
+		authService.LogoutHandler(w, r)
 	})
-	http.HandleFunc("/auth", userService.Authenticate(func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/auth", authService.Authenticate(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("This is an authenticated response"))
 	}))
 

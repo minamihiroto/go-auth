@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v8"
-	"github.com/golang-jwt/jwt"
+	"github.com/redis/go-redis/v9"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
