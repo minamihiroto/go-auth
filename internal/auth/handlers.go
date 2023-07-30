@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 )
 
 func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
@@ -94,28 +94,30 @@ func (s *Service) Authenticate(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		token, err := jwt.Parse(bearerToken, func(token *jwt.Token) (interface{}, error) {
+		token, _ := jwt.Parse(bearerToken, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				errMsg := "unexpected signing method: " + token.Header["alg"].(string)
+				http.Error(w, errMsg, http.StatusUnauthorized)
+				log.Printf("Invalid token: %s", errMsg)
+				return nil, nil
+			}
 			return []byte(s.mySigningKey), nil
 		})
-		if err != nil {
+
+		if token == nil || !token.Valid {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			log.Print("Invalid token: parsing error or invalid token")
+			return
+		}
+
+		_, err := s.redis.Get(context.Background(), bearerToken).Result()
+		if err != redis.Nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			log.Printf("Invalid token: %v", err)
 			return
 		}
 
-		if token.Valid {
-			_, err := s.redis.Get(context.Background(), bearerToken).Result()
-			if err != redis.Nil {
-				http.Error(w, "Invalid token", http.StatusUnauthorized)
-				log.Printf("Invalid token: %v", err)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		} else {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			log.Printf("Invalid token: %v", err)
-		}
+		next.ServeHTTP(w, r)
 	})
 }
 
